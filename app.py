@@ -174,7 +174,7 @@ if mode_top == "练习模式":
         if skip_clicked:
             st.session_state.answered = False
             st.session_state.idx = min(i + 1, len(pool) - 1)
-            st.experimental_rerun()
+            st.rerun()
 
         if submit_clicked:
             st.session_state.attempts += 1
@@ -190,7 +190,7 @@ if mode_top == "练习模式":
             if st.session_state.auto_advance:
                 st.session_state.answered = False
                 st.session_state.idx = min(i + 1, len(pool) - 1)
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.session_state.answered = True
 
@@ -198,7 +198,7 @@ if mode_top == "练习模式":
             if st.button("➡️ 下一题", use_container_width=True):
                 st.session_state.answered = False
                 st.session_state.idx = min(i + 1, len(pool) - 1)
-                st.experimental_rerun()
+                st.rerun()
 
     st.divider()
     st.subheader("📊 成绩面板")
@@ -230,7 +230,7 @@ else:
             ss.exam_duration_sec = int(exam_minutes) * 60
             ss.exam_start_ts = time.time()
             ss.idx = 0
-            st.experimental_rerun()
+            st.rerun()
 
     if ss.exam_running and not ss.exam_submitted:
         remaining = ss.exam_duration_sec - int(time.time() - ss.exam_start_ts)
@@ -259,10 +259,10 @@ else:
             c1, c2, c3 = st.columns(3)
             with c1:
                 if st.button("⬅️ 上一题", use_container_width=True) and ss.idx > 0:
-                    ss.idx -= 1; st.experimental_rerun()
+                    ss.idx -= 1; st.rerun()
             with c2:
                 if st.button("➡️ 下一题", use_container_width=True) and ss.idx < len(pool)-1:
-                    ss.idx += 1; st.experimental_rerun()
+                    ss.idx += 1; st.rerun()
             with c3:
                 if st.button("📝 交卷", type="primary", use_container_width=True):
                     ss.exam_running = False
@@ -317,4 +317,4 @@ else:
             ss.exam_report = None
             ss.exam_answers = {}
             ss.exam_pool = []
-            st.experimental_rerun()
+            st.rerun()

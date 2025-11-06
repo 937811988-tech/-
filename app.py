@@ -2,26 +2,18 @@ import json, random, hashlib, time
 from datetime import datetime
 import streamlit as st
 
-# -------------------- 基础设置 --------------------
 st.set_page_config(page_title="博学考试刷题 · 升级UI版", page_icon="📘", layout="wide")
 
-# ---- 全局 UI 样式（仅 CSS，无需新依赖）----
 st.markdown("""
 <style>
 :root { --pri:#3b82f6; --ok:#10b981; --err:#ef4444; --ink:#0f172a; --muted:#64748b; }
 .block-container { padding-top: 1.6rem; padding-bottom: 2.4rem; }
 h1,h2,h3 { letter-spacing:.2px; }
-
-/* 进度条 */
 .progress-wrap {display:flex; align-items:center; gap:.6rem; margin:.6rem 0 1rem;}
 .progress-bar {flex:1; height:10px; background:#e5e7eb; border-radius:999px; overflow:hidden;}
 .progress-bar > span {display:block; height:100%; background:var(--pri);}
-
-/* 题目卡片 */
 .q-card {background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:18px;}
 .q-title {font-size:1.05rem; line-height:1.65; color:var(--ink);}
-
-/* 选择项：把 radio 渲染成 2×2 网格卡片 */
 .stRadio > div { display:grid !important; grid-template-columns: 1fr 1fr; gap:12px; }
 .stRadio [role="radio"] { 
   border:1px solid #e5e7eb; border-radius:14px; padding:14px 14px; background:#fff; 
@@ -32,23 +24,17 @@ h1,h2,h3 { letter-spacing:.2px; }
   border-color: var(--pri); box-shadow: 0 0 0 3px rgba(59,130,246,.16);
 }
 .stRadio [role="radio"] p { margin:0; color:#0f172a; }
-
-/* 底部按钮样式（非固定定位，确保交互稳定） */
 .btn-row { display:flex; gap:.6rem; justify-content:flex-end; margin-top:.6rem; }
 .btn {padding:.6rem .9rem; border-radius:12px; border:1px solid #e5e7eb; background:#fff; cursor:pointer;}
 .btn.prim {background:var(--pri); color:#fff; border-color:var(--pri);}
 .btn.ghost {background:#fff;}
-
-/* 考试模式倒计时徽章 */
 .timer-chip {position:fixed; right:16px; top:16px; z-index:50; background:#111827; color:#fff;
   padding:8px 12px; border-radius:999px; font-variant-numeric: tabular-nums; font-weight:600;}
-/* 反馈条 */
 .alert-ok {border-left:4px solid var(--ok); background:#ecfdf5; padding:10px 12px; border-radius:10px;}
 .alert-err {border-left:4px solid var(--err); background:#fef2f2; padding:10px 12px; border-radius:10px;}
 </style>
 """, unsafe_allow_html=True)
 
-# -------------------- 工具函数 --------------------
 def qkey(q: dict) -> str:
     raw = f"{q.get('chapter','')}|{q.get('section','')}|{q.get('question','')}"
     return hashlib.md5(raw.encode("utf-8")).hexdigest()
@@ -83,7 +69,6 @@ def load_blueprint():
 ALL_QUESTIONS = load_questions()
 BLUEPRINT = load_blueprint()
 
-# 进度+题面卡片
 def ui_header(current:int, total:int, title_html:str):
     pct = 0 if total == 0 else int(current/total*100)
     st.markdown(
@@ -96,7 +81,6 @@ def ui_header(current:int, total:int, title_html:str):
         """, unsafe_allow_html=True
     )
 
-# -------------------- 会话状态初始化 --------------------
 def _init_session():
     ss = st.session_state
     ss.setdefault("pool", [])
@@ -112,9 +96,10 @@ def _init_session():
     ss.setdefault("exam_answers", {})
     ss.setdefault("exam_submitted", False)
     ss.setdefault("exam_report", None)
+    ss.setdefault("answered", False)       # 当前题是否已作答
+    ss.setdefault("auto_advance", False)   # 提交后是否自动跳到下一题
 _init_session()
 
-# -------------------- 侧栏筛选与模式 --------------------
 st.title("📘 博学考试刷题 · 升级UI版")
 st.caption("练习模式 + 考试模式（计时/合格线）。替换 questions.json 即可更新题库；可选 blueprint.json 指导抽题。")
 
@@ -136,7 +121,6 @@ def filter_by_chapter_section(q):
     in_sec = (not sec_sel) or (q.get("section","") in sec_sel) or (not q.get("section"))
     return in_ch and in_sec
 
-# -------------------- 练习模式 --------------------
 def build_practice_pool(limit=50):
     pool = [q for q in ALL_QUESTIONS if filter_by_chapter_section(q) and is_mcq(q)]
     random.shuffle(pool)
@@ -148,9 +132,16 @@ def reset_practice(limit):
     st.session_state.correct = 0
     st.session_state.attempts = 0
     st.session_state.history = []
+    st.session_state.answered = False
 
 if mode_top == "练习模式":
     st.header("🧪 练习模式")
+
+    st.sidebar.markdown("**交互方式**")
+    st.session_state.auto_advance = st.sidebar.checkbox(
+        "提交后自动跳到下一题", value=st.session_state.get("auto_advance", False)
+    )
+
     limit = st.sidebar.slider("每轮题量", 5, 300, min(50, len(ALL_QUESTIONS)))
     if not st.session_state.pool:
         reset_practice(limit)
@@ -166,25 +157,24 @@ if mode_top == "练习模式":
         q = pool[i]
         qid = qkey(q)
 
-        # 顶部：进度 + 题目卡片
         ui_header(i + 1, len(pool), f"**题目：** {q.get('question','')}")
 
-        # 选项：2×2 卡片（用 st.radio + CSS）
         opts = list(q["options"])
         rng = random.Random(qid); rng.shuffle(opts)
         prev = st.session_state.get(f"sel_{qid}", opts[0])
-        sel = st.radio(" ", opts, index=opts.index(prev) if prev in opts else 0, label_visibility="collapsed", key=f"sel_{qid}")
+        sel = st.radio(" ", opts, index=opts.index(prev) if prev in opts else 0,
+                       label_visibility="collapsed", key=f"sel_{qid}")
 
-        # 操作按钮
-        c1, c2 = st.columns(2)
-        with c1:
+        cols = st.columns(3)
+        with cols[0]:
             skip_clicked = st.button("⬅️ 跳过本题", use_container_width=True)
-        with c2:
+        with cols[2]:
             submit_clicked = st.button("✅ 提交答案", type="primary", use_container_width=True)
 
-        moved = False
         if skip_clicked:
-            moved = True
+            st.session_state.answered = False
+            st.session_state.idx = min(i + 1, len(pool) - 1)
+            st.experimental_rerun()
 
         if submit_clicked:
             st.session_state.attempts += 1
@@ -196,12 +186,20 @@ if mode_top == "练习模式":
                 st.markdown(f"<div class='alert-err'>❌ 回答错误。正确答案：{q.get('answer','')}</div>", unsafe_allow_html=True)
                 st.session_state.wrong_map[qid] = q
             st.session_state.history.append((qid, sel == q.get("answer","")))
-            moved = True
 
-        if moved:
-            st.session_state.idx = min(i + 1, len(pool) - 1)
+            if st.session_state.auto_advance:
+                st.session_state.answered = False
+                st.session_state.idx = min(i + 1, len(pool) - 1)
+                st.experimental_rerun()
+            else:
+                st.session_state.answered = True
 
-    # 成绩面板
+        if (not st.session_state.auto_advance) and st.session_state.answered:
+            if st.button("➡️ 下一题", use_container_width=True):
+                st.session_state.answered = False
+                st.session_state.idx = min(i + 1, len(pool) - 1)
+                st.experimental_rerun()
+
     st.divider()
     st.subheader("📊 成绩面板")
     acc = (st.session_state.correct / st.session_state.attempts * 100) if st.session_state.attempts else 0.0
@@ -210,7 +208,6 @@ if mode_top == "练习模式":
     c2.metric("📝 已作答", st.session_state.attempts)
     c3.metric("🎯 正确率", f"{acc:.1f}%")
 
-# -------------------- 考试模式 --------------------
 else:
     st.header("📝 考试模式")
     ss = st.session_state
@@ -218,7 +215,6 @@ else:
     pass_line = st.sidebar.number_input("合格线（百分制）", min_value=0, max_value=100, value=60, step=1)
 
     def build_exam_pool():
-        # 简洁实现：从筛选后的选择题中随机抽取，最多 100 题
         pool = [q for q in ALL_QUESTIONS if is_mcq(q) and filter_by_chapter_section(q)]
         random.shuffle(pool)
         return pool[:min(100, len(pool))]
@@ -242,7 +238,6 @@ else:
             ss.exam_running = False
             ss.exam_submitted = True
         m, s = divmod(max(0, remaining), 60)
-        # 倒计时徽章
         st.markdown(f"<div class='timer-chip'>⏳ {m:02d}:{s:02d}</div>", unsafe_allow_html=True)
 
         pool = ss.exam_pool
@@ -252,10 +247,8 @@ else:
             q = pool[ss.idx]
             qid = qkey(q)
 
-            # 顶部题面
             ui_header(ss.idx + 1, len(pool), f"**题目：** {q.get('question','')}")
 
-            # 2×2 选项
             opts = list(q["options"])
             rng = random.Random(qid); rng.shuffle(opts)
             prev_sel = ss.exam_answers.get(qid, opts[0])
@@ -263,7 +256,6 @@ else:
                            label_visibility="collapsed", key=f"exam_sel_{qid}")
             ss.exam_answers[qid] = sel
 
-            # 底部操作
             c1, c2, c3 = st.columns(3)
             with c1:
                 if st.button("⬅️ 上一题", use_container_width=True) and ss.idx > 0:
@@ -293,7 +285,7 @@ else:
                     "selected": sel,
                     "answer": q.get("answer",""),
                     "chapter": q.get("chapter",""),
-                    "section": q.get("section","")
+                    "section": q.get("section",""),
                 })
                 st.session_state.wrong_map[qid] = q
         score = round(correct / total * 100, 1) if total else 0.0
@@ -309,7 +301,6 @@ else:
             for i, item in enumerate(wrong_detail, 1):
                 st.markdown(f"**{i}. {item['question']}**")
 
-        # 导出简易报告
         report = {
             "score": score, "passed": passed, "total": total, "correct": correct,
             "wrong": len(wrong_detail), "timestamp": datetime.now().isoformat(timespec="seconds")

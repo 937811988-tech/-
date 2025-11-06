@@ -1,0 +1,51 @@
+{
+  "total": 80,
+  "rules": [
+    {
+      "chapter": [
+        "法律责任与合规"
+      ],
+      "difficulty": [
+        3,
+        5
+      ],
+      "type": "mcq",
+      "count": 10
+    },
+    {
+      "chapter": [
+        "附录·计算公式"
+      ],
+      "difficulty": [
+        3,
+        5
+      ],
+      "type": "mcq",
+      "count": 20
+    },
+    {
+      "chapter": [
+        "税费与登记"
+      ],
+      "difficulty": [
+        3,
+        5
+      ],
+      "type": "mcq",
+      "count": 25
+    },
+    {
+      "chapter": [
+        "第一章 新房买卖·流程与规则"
+      ],
+      "difficulty": [
+        3,
+        5
+      ],
+      "type": "mcq",
+      "count": 25
+    }
+  ],
+  "time_limit_minutes": 60,
+  "pass_score": 60
+}

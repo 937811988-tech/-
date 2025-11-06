@@ -1,4 +1,0 @@
-streamlit==1.39.0
-pillow==10.2.0
-pandas==2.3.3
-altair<6
